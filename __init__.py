@@ -1,1 +1,1 @@
-from .qopt impo QOptimizer
+from .qopt import QOptimizer
