@@ -3,6 +3,7 @@ import numpy as np
 from cvxopt import matrix, spdiag, mul, div, sqrt, normal, setseed
 from cvxopt import blas, lapack, solvers, sparse, spmatrix
 import math
+from qopt import QOptimizer
 
 def l1regls(A, b):
     """
