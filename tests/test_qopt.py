@@ -3,7 +3,6 @@ import numpy as np
 from cvxopt import matrix, spdiag, mul, div, sqrt, normal, setseed
 from cvxopt import blas, lapack, solvers, sparse, spmatrix
 import math
-from qopt import QOptimizer
 
 def l1regls(A, b):
     """
@@ -147,17 +146,15 @@ def l1regls2(A, b):
     m, n = A.size
     P = 2.0 * matrix([[A.T * A, matrix(0.0, (n, n))],
                      [matrix(0.0, (n, n)), matrix(0.0, (n, n))]])
-    print(P)
     q = matrix(1.0, (2*n, 1))
     q[:n] = -2.0 * A.T * b
-    print(q)
 
     G = matrix(np.vstack((np.hstack((np.identity(n), -np.identity(n))),
                           np.hstack((-np.identity(n), -np.identity(n))))))
-    print(G.size)
     h = matrix(0.0, (2*n, 1))
     A = matrix([[matrix(1.0, (1, n))], [matrix(0.0, (1, n))]])
     return solvers.qp(P, q, G, h, A, matrix([1.0]))['x'][:n]
+
 
 class TestQoptimizer(unittest.TestCase):
 
@@ -168,9 +165,11 @@ class TestQoptimizer(unittest.TestCase):
         print(u)
 
         o = QOptimizer(range(0, n))
-        o.set_regularization(1, l1_ratio=1)
-        o.set_alpha(np.array(P).T @ np.array(q))
-        o.set_factor_covariance(np.array(P).T @ np.array(P))
+        o.set_regularization(1, l1_ratio=0.5)
+        o.set_lower_bound(0.0)
+        o.set_upper_bound(0.3)
+        o.set_alpha(2 * np.array(P).T @ np.array(q))
+        o.set_exposure(np.array(P))
         res = o.solve()['x'][:10]
         print(res)
         print(np.sum(res), np.max(res), np.min(res))

@@ -7,6 +7,7 @@ from .base import BaseOptimizer
 
 solvers.options['abstol'] = 1e-8
 solvers.options['reltol'] = 1e-7
+solvers.options['show_progress'] = False
 
 
 class QOptimizer(BaseOptimizer):
@@ -20,7 +21,7 @@ class QOptimizer(BaseOptimizer):
                 sum(h) = 1,
                 OtherConstraints
 
-    where h is the target weight vector  
+    where h is the target weight vector
           h_bmk is the weight vector of the benchmark (e.g. index)
     """
 
@@ -37,9 +38,9 @@ class QOptimizer(BaseOptimizer):
         # constraints
         self.lower_bound = np.zeros(self.size)
         self.upper_bound = np.ones(self.size)
-        self.summed_value = kwargs.pop('summed_value', 1.0)
+        self.summed_value = float(kwargs.pop('summed_value', 1.0))
 
-        if (benchmark := kwargs.pop('benchmark', 0)) is not None:
+        if (benchmark := kwargs.pop('benchmark', 0.0)) is not None:
             self.set_benchmark(benchmark)
 
     def set_benchmark(self, benchmark):
@@ -84,6 +85,8 @@ class QOptimizer(BaseOptimizer):
             assert len(bound) == self.size, \
                 f"{label}_bound should be a scalar or an array of size of the index"
             target_bound = np.array(bound)
+
+        target_bound = target_bound.astype(float)
 
         if label == 'lower':
             self.lower_bound = target_bound
@@ -141,7 +144,15 @@ class QOptimizer(BaseOptimizer):
             exposure = exposure.mul(
                 pd.Series(category_weight).reindex(exposure.columns), axis=1)
 
-        self.cov_matrix = exposure.values @ exposure.values.T
+        self.cov_matrix = 2 * exposure.values @ exposure.values.T
+        return
+
+    def set_exposure(self, exposure):
+        if exposure.shape[1] != self.size:
+            raise ValueError(
+                f'expect an exposure matrix of {self.size} columns')
+
+        self.cov_matrix = 2 * exposure.T @ exposure
         return
 
     def set_factor_covariance(self, cov_matrix):
@@ -170,24 +181,24 @@ class QOptimizer(BaseOptimizer):
         if self.regularization is not None:
             λ, l1_ratio, base_value = self.regularization
 
-            self.P += λ * (1 - l1_ratio) * I.T * I
-            self.q += -λ * (1 - l1_ratio) * I * matrix(base_value)
+            self.P += 2 * λ * (1 - l1_ratio) * I.T * I
+            self.q += -2 * λ * (1 - l1_ratio) * I * matrix(base_value)
 
             if l1_ratio > 0.0:
-                self.q += (matrix(base_value).T * self.P).T
-                self.h -= self.G * matrix(base_value)
+                # self.q += (matrix(base_value).T * self.P).T
+                # self.h -= self.G * matrix(base_value)
 
                 zero = matrix(0.0, (self.size, self.size))
                 self.P = matrix([[self.P, zero],
                                  [zero, zero]])
-                print(self.G.size, zero.size, I.size)
-                self.q = matrix([self.q, matrix(l1_ratio, (self.size, 1))])
-                self.G = matrix([matrix([[self.G], [matrix(0.0, (self.size * 2, self.size))]]),
-                                 matrix([[I], [-I]]), matrix([[-I], [-I]])])
-                self.h = matrix([self.h, matrix(0.0, (2*self.size, 1))])
-                self.A = matrix([[self.A], [matrix(0.0, (1, self.size))]])
+                self.q = matrix([self.q, matrix(λ * l1_ratio, (self.size, 1))])
+                self.G = matrix([[self.G, matrix([I, -I])],
+                                 [matrix([zero, zero]), matrix([-I, -I])]])
+                '''base_value'''
+                self.h = matrix(
+                    [self.h, matrix(base_value), -matrix(base_value)])
+                self.A = matrix([self.A.T, matrix(0.0, (self.size, 1))]).T
 
-        print(self.h)
         return
 
     def solve(self):
